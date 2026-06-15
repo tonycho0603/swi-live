@@ -90,7 +90,10 @@ async function enterSpace() {
   previewEl.style.display = 'none';
   stageEl.classList.add('active');
 
-  api = startSpace(stageEl, me, { onLocalMove: (p) => { if (channel) sendMove(channel, p); } });
+  api = startSpace(stageEl, me, {
+    onLocalMove: (p) => { if (channel) sendMove(channel, p); },
+    onGesture: (name) => { if (channel) sendGesture(channel, { id: me.id, name }); },   // Space 점프 등
+  });
 
   channel = await joinRoom(ROOM, me, {
     onPresence: (state) => {
@@ -113,6 +116,9 @@ async function enterSpace() {
   });
   document.getElementById('btn-dance')?.addEventListener('click', () => {
     api.playGesture(me.id, 'dance'); sendGesture(channel, { id: me.id, name: 'dance' });
+  });
+  document.getElementById('btn-jump')?.addEventListener('click', () => {
+    api.playGesture(me.id, 'jump'); sendGesture(channel, { id: me.id, name: 'jump' });
   });
 }
 enterBtn.addEventListener('click', enterSpace);

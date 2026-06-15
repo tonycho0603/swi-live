@@ -13,12 +13,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 const GENDER_GLB = {
-  male:   'asset/character/male/Meshy_AI_Violet_Velocity_Kid_biped_Meshy_AI_Meshy_Merged_Animations.glb',
-  female: 'asset/character/female/Meshy_AI_Violet_Velocity_biped_Meshy_AI_Meshy_Merged_Animations.glb',
+  male:   'asset/character/male/Meshy_AI_Meshy_Merged_Animations.glb',
+  female: 'asset/character/female/Meshy_AI_Meshy_Merged_Animations-2.glb',
 };
 const CLIPS = {
-  male:   { idle: 'Idle_02', walk: 'Walking', run: 'Running', wave: 'Wave_for_Help_1', dance: 'Gangnam_Groove' },
-  female: { idle: 'Idle_02', walk: 'Walking', run: 'Running', wave: 'Wave_for_Help_1', dance: 'Superlove_Pop_Dance' },
+  male:   { idle: 'Idle_02', walk: 'Walking', run: 'Running', jump: 'Regular_Jump', wave: 'Wave_for_Help_1', dance: 'Gangnam_Groove' },
+  female: { idle: 'Idle_02', walk: 'Walking', run: 'Running', jump: 'Regular_Jump', wave: 'Wave_for_Help_1', dance: 'Superlove_Pop_Dance' },
 };
 const OBJECT_DIR = 'asset/object/';
 const OBJECTS = [
@@ -32,6 +32,8 @@ const OBJECTS = [
 
 const MOVE_SPEED  = 2.6;
 const RUN_SPEED   = 6.2;       // Shift 달리기
+const JUMP_V      = 5.0;       // 점프 초기 속도
+const GRAVITY     = 12;        // 중력 (점프 체공시간/높이 결정)
 const TURN_LERP   = 0.2;
 const REMOTE_LERP = 0.18;     // 원격 플레이어 위치 보간
 const BOUNDS      = 12;
@@ -137,13 +139,17 @@ function makeCharacter(gender, boneScales) {
     if (clip) actions[role] = mixer.clipAction(clip);
   }
   if (actions.wave) { actions.wave.setLoop(THREE.LoopOnce); actions.wave.clampWhenFinished = true; }
+  if (actions.jump) { actions.jump.setLoop(THREE.LoopOnce); actions.jump.clampWhenFinished = true; }
 
   const char = {
     model, mixer, actions,
     head: model.getObjectByName('Head'),
     active: null,
     gesture: null,     // null | 'dance' (지속)
-    oneShot: false,    // 인사(1회) 재생 중
+    oneShot: false,    // 1회 동작(인사/점프) 재생 중 — 애니메이션 잠금
+    jumping: false,    // 점프 물리 진행 중
+    jumpY: 0,
+    jumpVel: 0,
     groundY: 0,
     play(role) {
       if (this.active === role || !actions[role]) return;
@@ -153,7 +159,7 @@ function makeCharacter(gender, boneScales) {
     },
   };
   mixer.addEventListener('finished', (e) => {
-    if (e.action === actions.wave) char.oneShot = false;   // 인사 끝 → 렌더 루프가 idle/walk 복귀
+    if (e.action === actions.wave) char.oneShot = false;   // 인사 끝 → 복귀 (점프는 착지 시 해제)
   });
   char.groundY = groundOffset(model);
   model.position.y = char.groundY;
@@ -162,8 +168,8 @@ function makeCharacter(gender, boneScales) {
 
 /** 이동/제스처 상태에 따라 캐릭터 애니메이션 결정 (로컬·원격 공용) */
 function updateCharAnim(char, moving, running) {
-  if (moving) { char.gesture = null; char.oneShot = false; char.play(running ? 'run' : 'walk'); }
-  else if (char.oneShot) { /* 인사 재생 중 — 그대로 둠 */ }
+  if (char.oneShot) return;                 // 점프/인사 1회 동작 중엔 전환 금지 (이동해도 유지)
+  if (moving) { char.gesture = null; char.play(running ? 'run' : 'walk'); }
   else if (char.gesture === 'dance') char.play('dance');
   else char.play('idle');
 }
@@ -315,12 +321,38 @@ export function startSpace(stageEl, me, hooks) {
     setTimeout(() => { scene.remove(sp); const i = bubbles.indexOf(e); if (i >= 0) bubbles.splice(i, 1); }, ms);
   }
 
+  // 제스처 재생 (로컬/원격 공용)
+  function playGesture(id, name) {
+    const p = players.get(id);
+    if (!p) return;
+    const char = p.char;
+    if (name === 'wave') {
+      if (char.actions.wave) char.actions.wave.reset();
+      char.gesture = null; char.oneShot = true; char.play('wave');
+      showBubble(char, '안녕!', 2500);
+    } else if (name === 'jump') {
+      if (char.jumping) return;                       // 이미 점프 중이면 무시
+      if (char.actions.jump) char.actions.jump.reset();
+      char.gesture = null; char.oneShot = true;
+      char.jumping = true; char.jumpVel = JUMP_V;     // 물리 점프 시작
+      char.play('jump');
+    } else if (name === 'dance') {
+      char.oneShot = false;
+      char.gesture = char.gesture === 'dance' ? null : 'dance';
+    }
+  }
+
   // 입력
   const input = { forward: false, back: false, left: false, right: false, run: false };
   const KEY = { KeyW: 'forward', ArrowUp: 'forward', KeyS: 'back', ArrowDown: 'back',
                 KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
   const isShift = (c) => c === 'ShiftLeft' || c === 'ShiftRight';
-  window.addEventListener('keydown', (e) => { const d = KEY[e.code]; if (d) { input[d] = true; if (e.code.startsWith('Arrow')) e.preventDefault(); } if (isShift(e.code)) input.run = true; });
+  window.addEventListener('keydown', (e) => {
+    const d = KEY[e.code];
+    if (d) { input[d] = true; if (e.code.startsWith('Arrow')) e.preventDefault(); }
+    if (isShift(e.code)) input.run = true;
+    if (e.code === 'Space' && !e.repeat) { e.preventDefault(); playGesture(me.id, 'jump'); hooks.onGesture?.('jump'); }   // 점프
+  });
   window.addEventListener('keyup', (e) => { const d = KEY[e.code]; if (d) input[d] = false; if (isShift(e.code)) input.run = false; });
 
   stageEl.querySelectorAll('[data-dir]').forEach((btn) => {
@@ -401,6 +433,16 @@ export function startSpace(stageEl, me, hooks) {
 
     players.forEach(p => p.char.mixer.update(delta));
 
+    // 점프 물리 (로컬/원격 모두 — 트리거만 동기화, 포물선은 각자 계산)
+    players.forEach((p) => {
+      const c = p.char;
+      if (!c.jumping) return;
+      c.jumpVel -= GRAVITY * delta;
+      c.jumpY += c.jumpVel * delta;
+      if (c.jumpY <= 0) { c.jumpY = 0; c.jumpVel = 0; c.jumping = false; c.oneShot = false; }   // 착지
+      c.model.position.y = c.groundY + c.jumpY;
+    });
+
     // 말풍선 위치
     for (const b of bubbles) {
       if (!b.char.head) continue;
@@ -437,20 +479,6 @@ export function startSpace(stageEl, me, hooks) {
       if (!p || p.isLocal) return;
       p.target = { x: payload.x, z: payload.z, rotY: payload.rotY, moving: payload.moving, running: payload.running };
     },
-    playGesture(id, name) {
-      const p = players.get(id);
-      if (!p) return;
-      const char = p.char;
-      if (name === 'wave') {
-        if (char.actions.wave) char.actions.wave.reset();
-        char.gesture = null;
-        char.oneShot = true;
-        char.play('wave');
-        showBubble(char, '안녕!', 2500);
-      } else if (name === 'dance') {
-        char.oneShot = false;
-        char.gesture = char.gesture === 'dance' ? null : 'dance';
-      }
-    },
+    playGesture,
   };
 }
