@@ -78,6 +78,47 @@ html, body {
   color: #ffb4b4;
 }
 
+/* ===== 캐릭터 만들기 ===== */
+#create { display: none; }          /* 로그인 후 JS로 표시 */
+
+.gender-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.gender-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.gender-btn.selected {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.35);
+}
+
+.login-box input[type="number"] {
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  text-align: center;
+}
+
+.login-box input[type="number"]:focus { border-color: #667eea; }
+
 /* ===== 3D 공간 ===== */
 .stage {
   display: none;

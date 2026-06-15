@@ -48,7 +48,7 @@ export async function joinRoom(room, me, handlers) {
 
   await channel.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
-      await channel.track({ id: me.id, gender: me.gender, nickname: me.nickname });
+      await channel.track({ id: me.id, gender: me.gender, nickname: me.nickname, boneScales: me.boneScales });
       handlers.onReady?.();
     }
   });

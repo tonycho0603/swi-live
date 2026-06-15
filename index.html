@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>운동 메타버스 — 라이브</title>
+  <title>swi - 발표용공간</title>
   <link rel="stylesheet" href="css/style.css">
 
   <!-- Three.js (모듈) -->
@@ -21,11 +21,31 @@
   <!-- ===== 로그인 ===== -->
   <div id="login" class="login">
     <div class="login-box">
-      <h1>운동 메타버스</h1>
-      <p class="login-sub">발표용 라이브 공간 — 받은 ID로 입장하세요</p>
-      <input id="login-id" type="text" placeholder="예: user01" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <h1>swi - 발표용공간</h1>
+      <p class="login-sub">학번을 입력해 주세요</p>
+      <input id="login-id" type="text" inputmode="numeric" placeholder="예: 2021147529" autocomplete="off" autocapitalize="off" spellcheck="false">
       <button id="login-btn">입장하기</button>
       <p id="login-error" class="login-error"></p>
+    </div>
+  </div>
+
+  <!-- ===== 캐릭터 만들기 (인바디) ===== -->
+  <div id="create" class="login">
+    <div class="login-box">
+      <h1>내 캐릭터 만들기</h1>
+      <p class="login-sub">인바디 수치로 내 체형 캐릭터가 만들어져요</p>
+
+      <div class="gender-row">
+        <button type="button" class="gender-btn" data-gender="male">남자</button>
+        <button type="button" class="gender-btn" data-gender="female">여자</button>
+      </div>
+
+      <input id="c-weight" type="number" inputmode="decimal" placeholder="체중 (kg)">
+      <input id="c-bodyFat" type="number" inputmode="decimal" placeholder="체지방률 (%)">
+      <input id="c-muscle" type="number" inputmode="decimal" placeholder="골격근량 (kg)">
+
+      <button id="create-btn">입장하기</button>
+      <p id="create-error" class="login-error"></p>
     </div>
   </div>
 

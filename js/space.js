@@ -117,10 +117,17 @@ function buildEnvironment(scene) {
   });
 }
 
-/** 캐릭터 1명 생성 (clone) */
-function makeCharacter(gender) {
+/** 캐릭터 1명 생성 (clone). boneScales 있으면 인바디 체형 반영 */
+function makeCharacter(gender, boneScales) {
   const src = LOADED[gender] || LOADED.male;
   const model = cloneSkinned(src.scene);
+  // 인바디 본 스케일 적용 (없으면 기본 체형)
+  if (boneScales) {
+    for (const [bone, val] of Object.entries(boneScales)) {
+      const b = model.getObjectByName(bone);
+      if (b) b.scale.set(val, val, val);
+    }
+  }
   const mixer = new THREE.AnimationMixer(model);
   const actions = {};
   const map = CLIPS[gender] || CLIPS.male;
@@ -184,8 +191,8 @@ export function startSpace(stageEl, me, hooks) {
 
   const players = new Map();   // id → { char, isLocal, target:{x,z,rotY,moving} }
 
-  // 내 캐릭터
-  const localChar = makeCharacter(me.gender);
+  // 내 캐릭터 (인바디 체형 반영)
+  const localChar = makeCharacter(me.gender, me.boneScales);
   localChar.model.position.set(0, localChar.groundY, 2);
   scene.add(localChar.model);
   players.set(me.id, { char: localChar, isLocal: true });
@@ -302,7 +309,7 @@ export function startSpace(stageEl, me, hooks) {
   return {
     addPlayer(info) {
       if (players.has(info.id)) return;
-      const char = makeCharacter(info.gender);
+      const char = makeCharacter(info.gender, info.boneScales);
       const seed = info.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
       char.model.position.set((seed % 7) - 3, char.groundY, (seed % 5) - 3);
       char.play('idle');
