@@ -49,6 +49,16 @@
     </div>
   </div>
 
+  <!-- ===== 캐릭터 미리보기 (생성 연출) ===== -->
+  <div id="preview" class="login">
+    <div class="preview-box">
+      <h2 id="preview-title">캐릭터 생성중...</h2>
+      <p id="preview-sub" class="login-sub"></p>
+      <div id="preview-stage" class="preview-stage"></div>
+      <button id="enter-btn">이 캐릭터로 입장하기</button>
+    </div>
+  </div>
+
   <!-- ===== 3D 공간 ===== -->
   <div id="stage" class="stage">
     <!-- Three.js 캔버스는 여기에 주입됨 -->
@@ -57,11 +67,11 @@
 
       <!-- 방향 D-패드 -->
       <div class="dpad">
-        <button class="ctrl-btn" data-dir="forward" aria-label="앞으로">▲</button>
+        <button class="ctrl-btn" data-dir="forward" aria-label="앞으로">W</button>
         <div class="dpad-row">
-          <button class="ctrl-btn" data-dir="left" aria-label="왼쪽">◀</button>
-          <button class="ctrl-btn" data-dir="back" aria-label="뒤로">▼</button>
-          <button class="ctrl-btn" data-dir="right" aria-label="오른쪽">▶</button>
+          <button class="ctrl-btn" data-dir="left" aria-label="왼쪽">A</button>
+          <button class="ctrl-btn" data-dir="back" aria-label="뒤로">S</button>
+          <button class="ctrl-btn" data-dir="right" aria-label="오른쪽">D</button>
         </div>
       </div>
 

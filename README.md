@@ -1,40 +1,70 @@
-# 운동 메타버스 — 라이브 (발표용)
+# SWI 라이브 발표 공간 (실시간 멀티플레이어 메타버스)
 
-여러 명이 **같은 3D 헬스 공간에 동시에 들어와 서로 보이고 움직이는** 멀티플레이어 데모.
-미리 만든 ID로 로그인 → 배정된 기본 캐릭터로 입장.
+학번으로 로그인 → 인바디 수치로 내 3D 캐릭터 생성 → **여러 명이 같은 헬스장 공간에 동시 접속**해 서로 보고 움직이는 웹앱.
 
-- 실시간 동기화: **Supabase Realtime** (Presence + Broadcast, 서버 직접 운영 X)
-- 3D: Three.js (Fake Door 사이트의 공간/캐릭터 에셋 재사용)
-- Fake Door 사이트와 **완전히 별개 프로젝트**
+- 3D: **Three.js** (CDN)
+- 실시간 동기화: **Supabase Realtime** (Presence + Broadcast, 별도 서버 운영 없음)
+- 빌드 불필요한 **정적 웹** (HTML/CSS/JS)
 
-## 1. Supabase 준비 (1회)
-1. https://supabase.com 에서 무료 프로젝트 생성
-2. **Settings → API** 에서 `Project URL` 과 `anon public` 키 복사
-3. `js/config.js` 에 붙여넣기:
-   ```js
-   export const SUPABASE_URL = 'https://xxxx.supabase.co';
-   export const SUPABASE_ANON_KEY = 'eyJ...';
-   ```
-   → DB 테이블/SQL 설정 불필요 (Realtime 채널 기능만 사용)
+---
 
-## 2. 로컬 실행
-- VS Code Live Server 등으로 `index.html` 열기 (모듈 import 때문에 `file://` 직접 열기는 안 됨)
-- 여러 탭/기기에서 각각 다른 ID로 입장하면 서로 보임
+## 1. 실행에 필요한 것 (사전 준비)
+- **인터넷 연결** (Three.js·Supabase를 CDN으로 불러옴)
+- **로컬 정적 서버** — ES 모듈/importmap을 쓰므로 `index.html`을 파일로 직접(`file://`) 열면 안 됩니다.
+  - 권장: VS Code 확장 **Live Server**
+  - 또는 터미널에서 아래 중 하나로 이 폴더에서 서버 실행:
+    ```bash
+    # Python 3
+    python3 -m http.server 5500
+    # 또는 Node
+    npx serve .
+    ```
+- **Supabase 키는 이미 `js/config.js`에 포함**되어 있어 추가 설정이 필요 없습니다. (anon publishable 키 — 공개 가능)
 
-## 3. 로그인 계정
-- `user01` ~ `user30` (js/accounts.js)
-- 홀수=남자 / 짝수=여자 기본 캐릭터
-- 발표 때 청중에게 하나씩 나눠주면 됨
+## 2. 실행 방법 (단계별)
+1. 이 폴더(`metaverse-live`)를 로컬 서버로 엽니다.
+   - Live Server: `index.html` 우클릭 → **Open with Live Server**
+   - 또는 `http://localhost:5500/` 접속
+2. **학번 입력** → 입장. (등록된 학번만 가능 — 아래 "평가용 학번" 참고)
+3. **성별 선택 + 인바디 입력**(체중 / 체지방률 / 골격근량) → **입장하기**
+   - 골격근량이 캐릭터 체형(상·하체 크기)을 결정합니다.
+4. **캐릭터 생성 연출**(단계별로 커짐)을 본 뒤 **"이 캐릭터로 입장하기"** → 3D 공간 진입.
+
+### 평가용 학번
+등록된 학번 중 아무거나 사용하시면 됩니다. 예: **`2021147529`**
+(전체 목록은 `js/accounts.js` 참고)
+
+## 3. 멀티플레이어 확인 방법
+같은 공간에 여러 명이 들어오는 것을 보려면:
+- **브라우저 탭 2개**(또는 두 기기)를 열고 **서로 다른 학번**으로 각각 입장하세요.
+  - 예: 한쪽 `2021147529`, 다른 쪽 `2020147538`
+  - (같은 학번으로 동시에 두 번 들어가면 접속자 식별이 겹칠 수 있으니 다른 학번 사용)
+- 한쪽에서 움직이면 다른 쪽 화면에서 그 캐릭터가 실시간으로 움직입니다. 좌상단에 **접속자 N명**이 표시됩니다.
 
 ## 4. 조작
-- 이동: WASD / 방향키 / 화면 왼쪽 D-패드(모바일)
-- 시점: 빈 화면 드래그
-- 👋 인사 / 💃 춤 버튼
+| 동작 | 방법 |
+|---|---|
+| 이동 | `W A S D` / 방향키 / 화면 왼쪽 D-패드(모바일) |
+| 달리기 | **Shift + 이동** |
+| 시점 회전 | 빈 화면 **드래그** |
+| 인사 / 춤 | 화면 오른쪽 **👋 / 💃** 버튼 |
 
-## 5. 배포 (정적)
-- 빌드 불필요. 이 폴더를 그대로 Netlify drop / Vercel / GitHub Pages 등에 올리면 됨
-- 클라이언트만 정적 호스팅하면 되고, 실시간은 Supabase가 처리
+## 5. 파일 구조
+```
+index.html        로그인 → 인바디 → 미리보기 → 공간 화면
+css/style.css
+js/
+  config.js       Supabase URL/키 (이미 설정됨)
+  accounts.js     입장 허용 학번 목록
+  inbody.js       인바디 → 본 스케일 매핑
+  net.js          Supabase Realtime (Presence/Broadcast)
+  space.js        3D 공간/캐릭터/이동/동기화/생성연출
+  main.js         전체 흐름 제어
+asset/            캐릭터(남/여) + 헬스기구 GLB
+```
 
-## 참고
-- 캐릭터/기구 에셋 합계가 좀 큼(수십 MB) → 첫 로딩 느리면 텍스처 압축 고려
-- 30명 동시: Supabase 무료 티어로 충분 (Broadcast/Presence)
+## 6. 참고 / 문제 해결
+- `file://`로 열면 모듈 로드 실패 → **반드시 로컬 서버**로 여세요.
+- 등록되지 않은 학번은 "등록되지 않은 학번이에요" 표시됩니다.
+- 첫 입장 시 캐릭터/기구 에셋(수십 MB)을 받느라 잠시 로딩될 수 있습니다.
+- 배포 URL: (배포한 주소가 있으면 여기에 기입)

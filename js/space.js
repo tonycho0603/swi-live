@@ -17,8 +17,8 @@ const GENDER_GLB = {
   female: 'asset/character/female/Meshy_AI_Violet_Velocity_biped_Meshy_AI_Meshy_Merged_Animations.glb',
 };
 const CLIPS = {
-  male:   { idle: 'Idle_02', walk: 'Walking', wave: 'Wave_for_Help_1', dance: 'Gangnam_Groove' },
-  female: { idle: 'Idle_02', walk: 'Walking', wave: 'Wave_for_Help_1', dance: 'Superlove_Pop_Dance' },
+  male:   { idle: 'Idle_02', walk: 'Walking', run: 'Running', wave: 'Wave_for_Help_1', dance: 'Gangnam_Groove' },
+  female: { idle: 'Idle_02', walk: 'Walking', run: 'Running', wave: 'Wave_for_Help_1', dance: 'Superlove_Pop_Dance' },
 };
 const OBJECT_DIR = 'asset/object/';
 const OBJECTS = [
@@ -31,6 +31,7 @@ const OBJECTS = [
 ];
 
 const MOVE_SPEED  = 2.6;
+const RUN_SPEED   = 6.2;       // Shift 달리기
 const TURN_LERP   = 0.2;
 const REMOTE_LERP = 0.18;     // 원격 플레이어 위치 보간
 const BOUNDS      = 12;
@@ -160,11 +161,117 @@ function makeCharacter(gender, boneScales) {
 }
 
 /** 이동/제스처 상태에 따라 캐릭터 애니메이션 결정 (로컬·원격 공용) */
-function updateCharAnim(char, moving) {
-  if (moving) { char.gesture = null; char.oneShot = false; char.play('walk'); }
+function updateCharAnim(char, moving, running) {
+  if (moving) { char.gesture = null; char.oneShot = false; char.play(running ? 'run' : 'walk'); }
   else if (char.oneShot) { /* 인사 재생 중 — 그대로 둠 */ }
   else if (char.gesture === 'dance') char.play('dance');
   else char.play('idle');
+}
+
+// Fake Door와 동일한 단계별 "뚝!뚝!뚝!" 생성 연출 파라미터
+const GEN_STEPS = 3, STEP_INTERVAL = 1000, SNAP_DURATION = 180;
+function easeOutBack(t) { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
+
+/**
+ * 캐릭터 생성 미리보기 — Fake Door와 동일하게 상체 3단계 → 하체 3단계 스냅.
+ * @returns dispose() 함수 (공간 입장 전 호출해 정리)
+ */
+export function previewCharacter(containerEl, gender, boneScales, onDone) {
+  const w = containerEl.clientWidth || 360, h = containerEl.clientHeight || 480;
+  const scene = new THREE.Scene();
+  scene.background = null;                                  // 투명 (stage CSS 배경 비침) — Fake Door 동일
+  const camera = new THREE.PerspectiveCamera(30, w / h, 0.1, 100);
+  camera.position.set(0, 1.7, 9);
+  camera.lookAt(0, 1.25, 0);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  containerEl.appendChild(renderer.domElement);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));        // Fake Door와 동일한 조명
+  const d = new THREE.DirectionalLight(0xffffff, 1); d.position.set(3, 5, 3); scene.add(d);
+
+  const src = LOADED[gender] || LOADED.male;
+  const model = cloneSkinned(src.scene);
+  scene.add(model);
+  const mixer = new THREE.AnimationMixer(model);
+  const idle = src.animations.find(a => a.name === (CLIPS[gender] || CLIPS.male).idle);
+  if (idle) mixer.clipAction(idle).play();
+
+  const targets = boneScales || {};
+  const clock = new THREE.Clock();
+  const _vv = new THREE.Vector3();
+  let raf = null, disposed = false;
+
+  function ground() {
+    model.position.y = 0;
+    model.updateMatrixWorld(true);
+    let m = Infinity;
+    for (const n of FOOT_BONES) { const b = model.getObjectByName(n); if (b) { _vv.setFromMatrixPosition(b.matrixWorld); if (_vv.y < m) m = _vv.y; } }
+    if (m < Infinity) model.position.y = -m;
+  }
+  // 렌더 루프 (생성 스냅과 별개로 계속 그림)
+  function loop() {
+    raf = requestAnimationFrame(loop);
+    mixer.update(clock.getDelta());
+    ground();
+    renderer.render(scene, camera);
+  }
+  raf = requestAnimationFrame(loop);
+
+  // ===== 단계별 스냅 생성 (Fake Door 로직 포팅) =====
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  function curScale(name) { const b = model.getObjectByName(name); return b ? b.scale.x : 1; }
+  function snap(toScales, fromScales, durationMs) {
+    return new Promise((res) => {
+      const t0 = performance.now();
+      function step() {
+        if (disposed) return res();
+        const t = Math.min((performance.now() - t0) / durationMs, 1);
+        const e = easeOutBack(t);
+        for (const [name, target] of Object.entries(toScales)) {
+          const start = fromScales[name] ?? 1.0;
+          const v = start + (target - start) * e;
+          const b = model.getObjectByName(name);
+          if (b) b.scale.set(v, v, v);
+        }
+        if (t < 1) requestAnimationFrame(step); else res();
+      }
+      requestAnimationFrame(step);
+    });
+  }
+  async function steppedSnap(targetScales) {
+    const startScales = {};
+    for (const n of Object.keys(targetScales)) startScales[n] = curScale(n);
+    for (let i = 1; i <= GEN_STEPS; i++) {
+      if (disposed) return;
+      const ratio = i / GEN_STEPS;
+      const stepTarget = {};
+      for (const [n, t] of Object.entries(targetScales)) stepTarget[n] = startScales[n] + (t - startScales[n]) * ratio;
+      const from = {}; for (const n of Object.keys(targetScales)) from[n] = curScale(n);
+      await wait(STEP_INTERVAL - SNAP_DURATION);
+      await snap(stepTarget, from, SNAP_DURATION);
+    }
+  }
+  (async () => {
+    await steppedSnap({ Spine02: targets.Spine02, neck: targets.neck });   // 상체
+    await steppedSnap({ RightUpLeg: targets.RightUpLeg, LeftUpLeg: targets.LeftUpLeg }); // 하체
+    if (!disposed && onDone) onDone();
+  })();
+
+  const onResize = () => {
+    const ww = containerEl.clientWidth, hh = containerEl.clientHeight;
+    if (!ww) return;
+    camera.aspect = ww / hh; camera.updateProjectionMatrix(); renderer.setSize(ww, hh);
+  };
+  window.addEventListener('resize', onResize);
+
+  return function dispose() {
+    disposed = true;
+    cancelAnimationFrame(raf);
+    window.removeEventListener('resize', onResize);
+    renderer.dispose();
+    if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
+  };
 }
 
 /**
@@ -209,11 +316,12 @@ export function startSpace(stageEl, me, hooks) {
   }
 
   // 입력
-  const input = { forward: false, back: false, left: false, right: false };
+  const input = { forward: false, back: false, left: false, right: false, run: false };
   const KEY = { KeyW: 'forward', ArrowUp: 'forward', KeyS: 'back', ArrowDown: 'back',
                 KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
-  window.addEventListener('keydown', (e) => { const d = KEY[e.code]; if (d) { input[d] = true; if (e.code.startsWith('Arrow')) e.preventDefault(); } });
-  window.addEventListener('keyup', (e) => { const d = KEY[e.code]; if (d) input[d] = false; });
+  const isShift = (c) => c === 'ShiftLeft' || c === 'ShiftRight';
+  window.addEventListener('keydown', (e) => { const d = KEY[e.code]; if (d) { input[d] = true; if (e.code.startsWith('Arrow')) e.preventDefault(); } if (isShift(e.code)) input.run = true; });
+  window.addEventListener('keyup', (e) => { const d = KEY[e.code]; if (d) input[d] = false; if (isShift(e.code)) input.run = false; });
 
   stageEl.querySelectorAll('[data-dir]').forEach((btn) => {
     const d = btn.dataset.dir;
@@ -243,7 +351,7 @@ export function startSpace(stageEl, me, hooks) {
   });
 
   // 로컬 broadcast throttle
-  let lastSent = 0, lastMoving = false;
+  let lastSent = 0, lastMoving = false, lastRunning = false;
   const _dir = new THREE.Vector3();
   const clock = new THREE.Clock();
 
@@ -259,20 +367,22 @@ export function startSpace(stageEl, me, hooks) {
     const rx =  Math.cos(camYaw), rz = -Math.sin(camYaw);
     _dir.set(fx * f + rx * s, 0, fz * f + rz * s);
     const moving = _dir.lengthSq() > 0;
+    const running = input.run && moving;        // Shift + 이동 = 달리기
     const lm = localChar.model;
     if (moving) {
       _dir.normalize();
-      lm.position.x = THREE.MathUtils.clamp(lm.position.x + _dir.x * MOVE_SPEED * delta, -BOUNDS, BOUNDS);
-      lm.position.z = THREE.MathUtils.clamp(lm.position.z + _dir.z * MOVE_SPEED * delta, -BOUNDS, BOUNDS);
+      const speed = running ? RUN_SPEED : MOVE_SPEED;
+      lm.position.x = THREE.MathUtils.clamp(lm.position.x + _dir.x * speed * delta, -BOUNDS, BOUNDS);
+      lm.position.z = THREE.MathUtils.clamp(lm.position.z + _dir.z * speed * delta, -BOUNDS, BOUNDS);
       lm.rotation.y = lerpAngle(lm.rotation.y, Math.atan2(_dir.x, _dir.z), TURN_LERP);
     }
-    updateCharAnim(localChar, moving);
+    updateCharAnim(localChar, moving, running);
 
-    // 위치 전파: 이동 중 ~12/s, 멈춤 전환 시 1회
-    if ((moving && now - lastSent > 80) || (moving !== lastMoving)) {
+    // 위치 전파: 이동 중 ~12/s, 멈춤/달리기 전환 시 1회
+    if ((moving && now - lastSent > 80) || (moving !== lastMoving) || (running !== lastRunning)) {
       hooks.onLocalMove?.({ id: me.id, x: +lm.position.x.toFixed(2), z: +lm.position.z.toFixed(2),
-                            rotY: +lm.rotation.y.toFixed(2), moving });
-      lastSent = now; lastMoving = moving;
+                            rotY: +lm.rotation.y.toFixed(2), moving, running });
+      lastSent = now; lastMoving = moving; lastRunning = running;
     }
 
     // 원격 보간 + 애니메이션
@@ -283,9 +393,9 @@ export function startSpace(stageEl, me, hooks) {
         p.char.model.position.x += (t.x - p.char.model.position.x) * REMOTE_LERP;
         p.char.model.position.z += (t.z - p.char.model.position.z) * REMOTE_LERP;
         p.char.model.rotation.y = lerpAngle(p.char.model.rotation.y, t.rotY, REMOTE_LERP);
-        updateCharAnim(p.char, t.moving);
+        updateCharAnim(p.char, t.moving, t.running);
       } else {
-        updateCharAnim(p.char, false);
+        updateCharAnim(p.char, false, false);
       }
     }
 
@@ -325,7 +435,7 @@ export function startSpace(stageEl, me, hooks) {
     applyRemoteState(payload) {
       const p = players.get(payload.id);
       if (!p || p.isLocal) return;
-      p.target = { x: payload.x, z: payload.z, rotY: payload.rotY, moving: payload.moving };
+      p.target = { x: payload.x, z: payload.z, rotY: payload.rotY, moving: payload.moving, running: payload.running };
     },
     playGesture(id, name) {
       const p = players.get(id);
