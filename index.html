@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>운동 메타버스 — 라이브</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Three.js (모듈) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ===== 로그인 ===== -->
+  <div id="login" class="login">
+    <div class="login-box">
+      <h1>운동 메타버스</h1>
+      <p class="login-sub">발표용 라이브 공간 — 받은 ID로 입장하세요</p>
+      <input id="login-id" type="text" placeholder="예: user01" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button id="login-btn">입장하기</button>
+      <p id="login-error" class="login-error"></p>
+    </div>
+  </div>
+
+  <!-- ===== 3D 공간 ===== -->
+  <div id="stage" class="stage">
+    <!-- Three.js 캔버스는 여기에 주입됨 -->
+    <div class="space-controls">
+      <div class="topbar"><span id="count">접속자 1명</span></div>
+
+      <!-- 방향 D-패드 -->
+      <div class="dpad">
+        <button class="ctrl-btn" data-dir="forward" aria-label="앞으로">▲</button>
+        <div class="dpad-row">
+          <button class="ctrl-btn" data-dir="left" aria-label="왼쪽">◀</button>
+          <button class="ctrl-btn" data-dir="back" aria-label="뒤로">▼</button>
+          <button class="ctrl-btn" data-dir="right" aria-label="오른쪽">▶</button>
+        </div>
+      </div>
+
+      <!-- 제스처 -->
+      <div class="gestures">
+        <button class="ctrl-action" id="btn-wave">👋 인사</button>
+        <button class="ctrl-action" id="btn-dance">💃 춤</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
